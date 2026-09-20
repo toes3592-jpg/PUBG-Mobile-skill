@@ -1,0 +1,134 @@
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    ConversationHandler,
+    ContextTypes,
+    filters,
+)
+
+# Logging သတ်မှတ်ခြင်း
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+
+# --------------------------------------------------------------------------
+# ဖြည့်စွက်ရမည့် အချက်များ
+# --------------------------------------------------------------------------
+# BotFather မှ ရရှိလာသော Bot Token ကို ဒီနေရာမှာ ထည့်ပါ
+BOT_TOKEN = "@ErMgPUBG_bot"  
+
+# ငွေလွှဲပြေစာနှင့် စာရင်းများ တန်းရောက်လာစေချင်သည့် သင်၏ Telegram Admin User ID ကို ဒီနေရာမှာ ထည့်ပါ
+ADMIN_CHAT_ID = 123456789  
+# --------------------------------------------------------------------------
+
+# Conversation States
+CLAN_NAME, PHONE_NUMBER, RECEIPT_PHOTO = range(3)
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start Command မက်ဆေ့ဂျ်နှင့် ပြိုင်ပွဲ အချက်အလက်များ ပြသခြင်း"""
+    tournament_text = (
+        " **PUBG Player 100 ပြိုင်ပွဲကြီး** \n\n"
+        " **ပြိုင်ပွဲအသေးစိတ်**\n"
+        " ဝင်ကြေး: ၂,၅၀၀ ကျပ်\n"
+        " နိုင်ကြေး: ၁၅၀,၀ဝ၀ ကျပ်\n\n"
+        " **ငွေလွှဲရန် အကောင့်များ**\n"
+        " KBZPay: ThaZinAung (09678656083)\n"
+        " WavePay: နွယ်အေး (09668655420)\n\n"
+        "စာရင်းပေးသွင်းရန် အောက်ပါ ခလုတ်ကို နှိပ်ပါ။"
+    )
+    
+    keyboard = [[InlineKeyboardButton(" စာရင်းပေးသွင်းမည်", callback_data="register")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if update.message:
+        await update.message.reply_text(tournament_text, reply_markup=reply_markup, parse_mode="Markdown")
+    else:
+        query = update.callback_query
+        await query.answer()
+        await query.edit_message_text(tournament_text, reply_markup=reply_markup, parse_mode="Markdown")
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """စာရင်းပေးသွင်းခြင်း စတင်ခြင်း"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "register":
+        await query.message.reply_text("ကျေးဇူးပြု၍ သင်၏ **Clan Name / In-Game Name** ကို ရိုက်ပို့ပေးပါ။")
+        return CLAN_NAME
+
+async def get_clan_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Clan Name စုဆောင်းခြင်း"""
+    context.user_data["clan_name"] = update.message.text
+    await update.message.reply_text("ကျေးဇူးပြု၍ သင်၏ **ဆက်သွယ်ရန် ဖုန်းနံပါတ်** ကို ရိုက်ပို့ပေးပါ။")
+    return PHONE_NUMBER
+
+async def get_phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ဖုန်းနံပါတ် စုဆောင်းခြင်း"""
+    context.user_data["phone"] = update.message.text
+    await update.message.reply_text("ကျေးဇူးပြု၍ **ငွေလွှဲပြေစာ (Transaction Screenshot)** ဓာတ်ပုံ ပို့ပေးပါ။")
+    return RECEIPT_PHOTO
+
+async def get_receipt_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ငွေလွှဲပြေစာ ဓာတ်ပုံ လက်ခံပြီး Admin သို့ တန်းပို့ပေးခြင်း"""
+    photo = update.message.photo[-1] # အကြည်လင်းဆုံး ဓာတ်ပုံကို ယူခြင်း
+    
+    user = update.effective_user
+    clan_name = context.user_data.get("clan_name")
+    phone = context.user_data.get("phone")
+
+    # Admin သို့ ပို့မည့် စာသား
+    admin_message = (
+        " **စာရင်းပေးသွင်းမှု အသစ်ရောက်ရှိပါသည်။**\n\n"
+        f" **Bot:** @ErMgPUBG_bot\n"
+        f" **Telegram User:** @{user.username if user.username else 'မရှိပါ'} ({user.first_name})\n"
+        f" **Clan / Player Name:** {clan_name}\n"
+        f" **Phone Number:** {phone}\n"
+    )
+
+    # Admin ထံသို့ ဓာတ်ပုံနှင့် အချက်အလက်များ တန်းပို့ပေးခြင်း
+    await context.bot.send_photo(
+        chat_id=ADMIN_CHAT_ID,
+        photo=photo.file_id,
+        caption=admin_message,
+        parse_mode="Markdown"
+    )
+
+    # ကစားသမားထံ အကြောင်းပြန်ခြင်း
+    await update.message.reply_text(
+        " **စာရင်းပေးသွင်းခြင်း အောင်မြင်ပါသည်။**\n"
+        "ငွေလွှဲပြေစာနှင့် အချက်အလက်များကို တာဝန်ရှိသူထံ ပို့ဆောင်ပေးလိုက်ပါပြီ။"
+    )
+
+    return ConversationHandler.END
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """စာရင်းပေးသွင်းခြင်း ပယ်ဖျက်ခြင်း"""
+    await update.message.reply_text("စာရင်းပေးသွင်းခြင်းကို ပယ်ဖျက်လိုက်ပါပြီ။")
+    return ConversationHandler.END
+
+def main():
+    """Bot စတင်ပတ်မည့် Main Function"""
+    application = Application.builder().token(BOT_TOKEN).build()
+
+    conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(button_handler, pattern="^register$")],
+        states={
+            CLAN_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_clan_name)],
+            PHONE_NUMBER: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone_number)],
+            RECEIPT_PHOTO: [MessageHandler(filters.PHOTO, get_receipt_photo)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(conv_handler)
+
+    print("ErMgPUBG_bot is running...")
+    application.run_polling()
+
+if __name__ == "__main__":
+    main()
